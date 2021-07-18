@@ -1,17 +1,18 @@
-# Start with Windows Server Core image
-FROM microsoft/windowsservercore
+FROM mcr.microsoft.com/dotnet/framework/sdk:4.8 AS build
+WORKDIR /app
 
-RUN powershell -Command Add-WindowsFeature NET-WCF-TCP-Activation45
+# copy csproj and restore as distinct layers
+COPY OrderingApp.sln .
+COPY Ordering.Calc.Api/*.csproj ./Ordering.Calc.Api/
+COPY Ordering.Calc.Api/*.config ./Ordering.Calc.Api/
+RUN nuget restore
 
-# Creates a directory for the Host
-WORKDIR app
+# copy everything else and build app
+COPY Ordering.Calc.Api/. ./Ordering.Calc.Api/
+WORKDIR /app/Ordering.Calc.Api
+RUN msbuild /p:Configuration=Release -r:False
 
-# Listen on port 83.
-EXPOSE 83
 
-# Copy the WCF host into the container.
-COPY Ordering.WindowsService/bin/Debug .
-
-Ordering.WindowsService\bin\Debug
-
-ENTRYPOINT Ordering.WindowsService.exe
+FROM mcr.microsoft.com/dotnet/framework/aspnet:4.8 AS runtime
+WORKDIR /inetpub/wwwroot
+COPY --from=build /app/Ordering.Calc.Api/. ./
